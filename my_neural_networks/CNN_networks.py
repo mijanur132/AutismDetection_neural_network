@@ -4,26 +4,70 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
+MnistAutism="01"
 
-outputClassN=2
-imageRes=224
+def conv_mxPool_param(imageRes,kernelSize,maxPoolParam,pad,stride):
+    imageRes=imageRes+2*pad
+    NfilterPass = (imageRes - kernelSize + 1) // stride  #number of filter passes with size ks1 and stride st1
+    print("NfilterPass",NfilterPass)
+    outRes = NfilterPass // maxPoolParam  # after first conv and maxpool
+    print("outres",outRes)
+    return outRes
+
+
+if(MnistAutism=="10"):
+    outputClassN=10
+    imageRes=28
+    maxPoolParam1 = 2
+    maxPoolParam2 = 2
+    ks1=2
+    ks2=2
+    st1=1
+    st2=1
+    pd1=2
+    pd2=2
+    outRes=conv_mxPool_param(imageRes, kernelSize=ks1, maxPoolParam=maxPoolParam1, pad=pd1, stride=st1)
+    outRes=conv_mxPool_param(outRes, kernelSize=ks2, maxPoolParam=maxPoolParam2, pad=pd2, stride=st2)
+    self_var1=outRes*outRes
+    print(self_var1)
+
+if(MnistAutism=="01"):
+    outputClassN=2
+    imageRes=224
+    maxPoolParam1=2
+    maxPoolParam2 = 2
+    ks1 = 3
+    ks2 = 4
+    st1 = 1
+    st2 = 1
+    pd1 = 2
+    pd2 = 2
+    outRes = conv_mxPool_param(imageRes, kernelSize=ks1, maxPoolParam=maxPoolParam1, pad=pd1, stride=st1)
+    outRes = conv_mxPool_param(outRes, kernelSize=ks2, maxPoolParam=maxPoolParam2, pad=pd2, stride=st2)
+    self_var1=outRes*outRes
+    print(self_var1)
 
 class CNNNet(nn.Module):
     def __init__(self):
         super(CNNNet, self).__init__()
-        self.Var1=2*2*3
-        #self.conv1 = nn.Conv2d(1, 10, kernel_size=14, stride=1, padding=7)
-        #self.conv2 = nn.Conv2d(10, 20, kernel_size=14, stride=1, padding=1)
-        self.conv1 = nn.Conv2d(1, 3, kernel_size=21, stride=7, padding=3)
-        self.conv2 = nn.Conv2d(3, 3, kernel_size=6,stride=3,padding=1)
-        self.fc1 = nn.Linear(self.Var1, 10)
-        self.fc2 = nn.Linear(10, outputClassN)
+        self.firstLayerNFilter=3
+        self.lastLayerNFilter=3
+        self.firstLinearLayerN=100
+        self.outputclassN=outputClassN
+        self.maxPoolParam1=maxPoolParam1
+        self.maxPoolParam2 = maxPoolParam2
+        self.Var1 = self_var1 * self.lastLayerNFilter
+
+        self.conv1 = nn.Conv2d(1, self.firstLayerNFilter, kernel_size=ks1, stride=st1, padding=pd1)
+        self.conv2 = nn.Conv2d(self.firstLayerNFilter, self.lastLayerNFilter, kernel_size=ks2,stride=st2,padding=pd2)
+        self.fc1 = nn.Linear(self.Var1, self.firstLinearLayerN)
+        self.fc2 = nn.Linear(self.firstLinearLayerN, self.outputclassN)
 
     def forward(self, x):
         # 2D convolutional layer with max pooling layer and reLU activations
-        x = F.relu(F.max_pool2d(self.conv1(x), 2))
+        x = F.relu(F.max_pool2d(self.conv1(x), self.maxPoolParam1))
         # 2nd layer of 2D convolutional layer with max pooling layer and reLU activations
-        x = F.relu(F.max_pool2d(self.conv2(x), 2))
+        x = F.relu(F.max_pool2d(self.conv2(x), self.maxPoolParam2))
         # rearrange output from a 2d array (matrix) to a vector
         x = x.view(-1, self.Var1)
         # fully connected layer with ReLU activation
@@ -59,14 +103,17 @@ class Net2():
         self.model.train()
         # Forward pass. Gets output *before* softmax
         output = self.model.forward(x)
-
+        #print(y)
         ys=torch.squeeze(y)
         # Computes the negative log-likelihood over the training data target.
         #     log(softmax(.)) avoids computing the normalization factor.
         #     Note that target does not need to be 1-hot encoded (pytorch will 1-hot encode for you)
 
-        ys=ys.type(torch.LongTensor)
-        loss = F.nll_loss(output, ys)
+        ys=ys.type(torch.LongTensor).cuda(0)
+
+       # print('output',output)
+       # print('ys',ys)
+        loss = F.nll_loss(output, ys) #ys for aut
 
         # **Very important,** need to zero the gradient buffer before we can use the computed gradients
         self.model.zero_grad()  # zero the gradient buffers of all parameters
@@ -119,8 +166,8 @@ class Net2():
         with torch.no_grad():
             outputs = self.model.forward(X.view(-1,1,imageRes,imageRes))
             ys = torch.squeeze(y)
-            ys = ys.type(torch.LongTensor)
-            loss = F.nll_loss(outputs, ys)
+            ys = ys.type(torch.LongTensor).cuda(0)
+            loss = F.nll_loss(outputs, ys) #ys for aut
             return loss
 
     def predict(self, X):
